@@ -1,0 +1,37 @@
+name: Hullproof
+description: Run the Hullproof Engine on a repository and fail the check when a blocking finding is open. No model, no secrets.
+inputs:
+  path:
+    description: Folder to scan, relative to the workspace.
+    required: false
+    default: "."
+  stage:
+    description: LAUNCH, GROWTH or SCALE. Empty reads docs/security/STAGE.md, else LAUNCH.
+    required: false
+    default: ""
+  fail-on:
+    description: blocker, critical, high, medium, low or none. The check fails when a finding at or above this level failed.
+    required: false
+    default: "blocker"
+  upload-sarif:
+    description: Send results.sarif to GitHub code scanning (needs security-events write and code scanning on the repository).
+    required: false
+    default: "true"
+  comment:
+    description: Add or update a summary comment on pull requests (needs pull-requests write).
+    required: false
+    default: "true"
+  github-token:
+    description: Token used for the SARIF upload and the comment. Pull requests from forks have a read only token, so both are skipped there.
+    required: false
+    default: ${{ github.token }}
+outputs:
+  exit-code:
+    description: 0 nothing blocking, 1 a blocking finding is open, 2 error.
+  blocked:
+    description: true when a blocking finding is open.
+  artifacts-path:
+    description: Folder holding findings.json, report.md, results.sarif and pr-comment.md.
+runs:
+  using: docker
+  image: Dockerfile
