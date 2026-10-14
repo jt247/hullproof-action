@@ -6,7 +6,8 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
-import { esc, escProp, isForkPr, main, MARKER, resolveTarget } from '../src/run.mjs';
+import { spawnSync } from 'node:child_process';
+import { esc, escProp, headCommit, isForkPr, main, MARKER, resolveTarget } from '../src/run.mjs';
 
 function workspace(code) {
   const ws = mkdtempSync(join(tmpdir(), 'ha-ws-'));
@@ -141,4 +142,23 @@ test('helpers: escaping and fork detection', () => {
   assert.equal(isForkPr({}), false);
   assert.equal(isForkPr({ pull_request: { head: { repo: { fork: true } } } }), true);
   assert.equal(isForkPr({ pull_request: { head: { repo: { full_name: 'a/b', fork: false } }, base: { repo: { full_name: 'c/d' } } } }), true);
+});
+
+test('pull_request_target: a checkout of the pull request head is refused, a checkout of the base is not', async () => {
+  const gh = await fakeGithub();
+  const { ws, bin } = workspace(0);
+  const G = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.invalid', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.invalid' };
+  for (const a of [['init', '-q'], ['add', '-A'], ['commit', '-q', '-m', 'x']]) assert.equal(spawnSync('git', ['-C', ws, ...a], { env: G }).status, 0);
+  const sha = headCommit(ws);
+  assert.match(sha, /^[0-9a-f]{40}$/);
+  const head = { event: { pull_request: { number: 3, head: { sha, repo: { full_name: 'o/r', fork: false } }, base: { repo: { full_name: 'o/r' } } } }, env: { GITHUB_EVENT_NAME: 'pull_request_target' } };
+  const c1 = capture();
+  assert.equal(await main(base(ws, bin, gh.url, head), c1.out), 2);
+  assert.ok(c1.lines.some((l) => l.startsWith('::error::') && l.includes('pull_request_target')));
+  assert.equal(gh.calls.length, 0);
+  const baseCheckout = { ...head, event: { pull_request: { number: 3, head: { sha: 'f'.repeat(40), repo: { full_name: 'o/r', fork: false } }, base: { repo: { full_name: 'o/r' } } } } };
+  const c2 = capture();
+  assert.equal(await main(base(ws, bin, gh.url, baseCheckout), c2.out), 0);
+  assert.ok(c2.lines.some((l) => l.startsWith('::warning::')));
+  gh.close();
 });

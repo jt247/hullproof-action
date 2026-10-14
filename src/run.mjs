@@ -29,6 +29,12 @@ export function resolveTarget(workspace, given) {
   return { path: abs };
 }
 
+// The commit checked out in the workspace, or null when git cannot say.
+export function headCommit(workspace) {
+  const r = spawnSync('git', ['-c', 'safe.directory=*', '-C', workspace, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
+  return r.status === 0 ? r.stdout.trim() : null;
+}
+
 export function readEvent(env) {
   try { return env.GITHUB_EVENT_PATH ? JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, 'utf8')) : {}; } catch { return {}; }
 }
@@ -102,6 +108,17 @@ export async function main(env = process.env, out = (s) => process.stdout.write(
   if (!STAGES.includes(stage)) { out('::error::stage takes LAUNCH, GROWTH or SCALE, or nothing to read docs/security/STAGE.md'); return 2; }
   const target = resolveTarget(workspace, input(env, 'path', '.'));
   if (target.error) { out(`::error::${esc(target.error)}`); return 2; }
+
+  // pull_request_target runs with a write token and secrets. Scanning the head of the pull request there would hand untrusted code
+  // to a privileged job, so the action stops when the checkout is the pull request head. A checkout of the base is fine.
+  if (env.GITHUB_EVENT_NAME === 'pull_request_target') {
+    const head = readEvent(env).pull_request?.head?.sha;
+    if (head && headCommit(workspace) === head) {
+      out('::error::This job runs on pull_request_target and has checked out the head of the pull request, which is code from a fork or a branch you do not control. The action will not scan it. Use the pull_request event, or check out the base branch.');
+      return 2;
+    }
+    out('::warning::pull_request_target runs with a write token and secrets. Do not check out the head of the pull request in this workflow.');
+  }
 
   const outDir = join(workspace, '.hullproof');
   const artifacts = join(outDir, 'ci');

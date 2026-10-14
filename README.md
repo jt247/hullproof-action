@@ -56,8 +56,8 @@ Outputs are `exit-code`, `blocked` and `artifacts-path`. The folder holds `findi
 
 1. The edition is the Free edition: the BLOCKER and CRITICAL requirements. The check exits 1 when a finding at or above `fail-on` failed, 0 when none did, and 2 when it could not run.
 2. A pull request from a fork gets a read only token and no secrets. For it the SARIF upload and the comment are skipped with a note, the job summary still shows the result, and the exit code is unchanged.
-3. Use the `pull_request` event. Do not check out the head of a pull request under `pull_request_target`, which would run untrusted code with a write token.
-4. If code scanning is not available for your repository (private repositories need GitHub Advanced Security), the upload is reported as a notice and the SARIF file stays in the workflow artifacts.
+3. Use the `pull_request` event. Under `pull_request_target` the action stops with an error when the checkout is the head of the pull request, because that would run untrusted code with a write token and secrets.
+4. If code scanning is not enabled for your repository, GitHub refuses the upload with HTTP 403. The action reports that as a notice, the check result is unchanged, and the SARIF file is in the workflow artifacts. On a private repository owned by a personal account, GitHub answered exactly that when this action was tested.
 5. Text from your repository, such as file names and finding titles, is treated as data. It is escaped before it goes into a workflow command.
 6. The model hunt is not part of this action. It needs a provider key and the Pro edition.
 
