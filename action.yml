@@ -34,4 +34,4 @@ outputs:
     description: Folder holding findings.json, report.md, results.sarif and pr-comment.md.
 runs:
   using: docker
-  image: Dockerfile
+  image: docker://ghcr.io/jt247/hullproof-action@sha256:edb214f237d56eff3433186a65a3a52fbff2a77413197a1f930ce2b641128f03

@@ -39,6 +39,22 @@ jobs:
 
 Pin the action to a full commit SHA, the way you pin every other action, and keep the release in a trailing comment. When you update it, replace the SHA and the comment together. A tag can be moved; a commit SHA cannot.
 
+## Image for GitLab, CircleCI, Bitbucket and Azure
+
+The action runs from a container image that holds the engine and the scanners at pinned versions. The CI templates for GitLab CI, CircleCI, Bitbucket Pipelines and Azure Pipelines (in the Hullproof Engine repository, folder `ci-templates/`) run the same image. Replace the `REPLACE_WITH_THE_DIGEST_FROM_THE_RELEASE_NOTES` placeholder in the image line of the template with this digest:
+
+```
+ghcr.io/jt247/hullproof-action@sha256:edb214f237d56eff3433186a65a3a52fbff2a77413197a1f930ce2b641128f03
+```
+
+The image is built for linux/amd64 and linux/arm64. Check that you can pull it before you change your pipeline:
+
+```
+docker pull ghcr.io/jt247/hullproof-action@sha256:edb214f237d56eff3433186a65a3a52fbff2a77413197a1f930ce2b641128f03
+```
+
+The digest changes with each release of the action. The one above is for release 0.5.0. Newer digests are listed on the releases page of this repository, and the same digest is pinned in `action.yml`.
+
 ## Inputs
 
 | Input | Default | Meaning |

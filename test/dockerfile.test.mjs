@@ -45,3 +45,10 @@ test('the vendored Free kit files are the 0.5.0 ones, with their licences and th
   assert.match(read('kit/SOURCE.txt'), /commit [0-9a-f]{40}\./);
   assert.match(read('kit/LICENSE-DOCS-CC-BY-SA-4.0.txt'), /Attribution-ShareAlike 4\.0/);
 });
+
+test('action.yml runs the published image by digest, and the README gives the same digest', () => {
+  const m = /^  image: docker:\/\/ghcr\.io\/jt247\/hullproof-action@(sha256:[0-9a-f]{64})$/m.exec(read('action.yml'));
+  assert.ok(m, 'action.yml pins the image by digest');
+  assert.ok(read('README.md').includes(`ghcr.io/jt247/hullproof-action@${m[1]}`));
+  assert.ok(read('README.md').includes(`docker pull ghcr.io/jt247/hullproof-action@${m[1]}`));
+});
