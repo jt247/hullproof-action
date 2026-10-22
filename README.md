@@ -1,6 +1,6 @@
 # Hullproof Action
 
-Runs the Hullproof Engine on your repository and fails the check when a blocking finding is open. It reads code and configuration only. No model is called and no secret is needed.
+Runs the [Hullproof Engine](https://github.com/jt247/hullproof-engine) on your repository and fails the check when a blocking finding is open. It reads code and configuration only. No model is called and no secret is needed.
 
 Version 0.5.0 installs the npm package `hullproof` at exactly 0.5.0 and checks its published integrity before it installs anything.
 
@@ -85,7 +85,7 @@ Least privilege, as in the example: `contents: read` for the checkout, `security
 
 The base image by digest. Node, Gitleaks, Trivy and OSV Scanner by version and sha256 for each CPU architecture. Semgrep and every Python package it needs by version and wheel hash (`semgrep.lock`). The engine by exact npm version, sha512 integrity and sha1 shasum, checked by the build, which stops on a mismatch. Operating system packages (git, Python, certificates) come from the pinned Debian image through apt and are not hash pinned.
 
-`kit/` holds the Free kit files the engine reads at run time (the controls file, the release gate and the record validators), copied from the Hullproof Free repository at the commit named in `kit/SOURCE.txt`. `scripts/sync-inputs.sh` refreshes them.
+`kit/` holds the Free kit files the engine reads at run time (the controls file, the release gate and the record validators), copied from the [Hullproof Free repository](https://github.com/jt247/hullproof-free) at the commit named in `kit/SOURCE.txt`. `scripts/sync-inputs.sh` refreshes them.
 
 ## Licences and notices
 
