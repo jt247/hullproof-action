@@ -8,10 +8,11 @@
 // Exit codes: 0 no errors, 1 errors found, 2 usage error or unreadable input.
 // Output is counts and numbered messages with record index and field path. Record text is never printed, except the first
 // 80 characters of a fingerprint, escaped. Each message names its rule, F1 to F20, as the checks below set it.
-// Schema 1.0.0 and 1.1.0 are both accepted. 1.1.0 adds `machine_evidence` on a fail record (rule F20).
+// Schemas 1.0.0, 1.1.0 and 1.2.0 are accepted. 1.1.0 adds `machine_evidence` on a fail record (rule F20); 1.2.0 adds its evidence kind and
+// run fields (F20, F21), lets a test shown in the sandbox stand in for owner evidence (F13) and adds the reason engine_hunt (F15).
 import { pathToFileURL } from 'node:url';
 import {
-  Collector, FINDINGS_INCOMPLETE_REASONS, FINDINGS_SCHEMA_VERSIONS, InputError, MACHINE_EVIDENCE, MACHINE_EVIDENCE_VERSION, MAX_BLOCK_CHARS, MAX_DEPTH,
+  Collector, EVIDENCE_KIND_VERSION, FINDINGS_INCOMPLETE_REASONS, MIN_PROOF_RUNS, SCHEMA_VERSION, FINDINGS_SCHEMA_VERSIONS, InputError, MACHINE_EVIDENCE, MACHINE_EVIDENCE_VERSION, MAX_BLOCK_CHARS, MAX_DEPTH,
   RAISED_BY, REF, SEC_IDS, SEV_RANK, SEVERITIES, T,
   WARN_BLOCK_CHARS, ROUTE_STATES, HEADER_FIELDS, checkRunHeader, checkShape, cmpBytes, esc, extractBlock, hasOwn,
   inputProblem, isGatedSeverity, isPlain, loadControls, parseJson, readInput, scanStructure, schemaOf, todayUtc,
@@ -180,7 +181,19 @@ function checkRecord(rec, i, ctx, state, controls, report) {
     const rules = CLASS_RULES[rec.class];
     // F20: a rule or check hit stands in for the boundary and trace of a SUSPECTED finding. VERIFIED still needs both.
     const machine = hasOwn(rec, 'machine_evidence');
-    if (machine && state.version !== MACHINE_EVIDENCE_VERSION) at('F20', 'machine_evidence', `needs schema_version ${MACHINE_EVIDENCE_VERSION}`);
+    if (machine && state.version === SCHEMA_VERSION) at('F20', 'machine_evidence', `needs schema_version ${MACHINE_EVIDENCE_VERSION} or later`);
+    const me = machine ? rec.machine_evidence : null;
+    if (me) {
+      const v12 = state.version === EVIDENCE_KIND_VERSION;
+      const has = (k) => hasOwn(me, k);
+      if (!v12 && (has('evidence_kind') || has('runs') || has('runs_proven'))) at('F20', 'machine_evidence', `evidence_kind, runs and runs_proven need schema_version ${EVIDENCE_KIND_VERSION}`);
+      if (v12 && !has('evidence_kind')) at('F20', 'machine_evidence.evidence_kind', `is required in schema_version ${EVIDENCE_KIND_VERSION}`);
+      const sandbox = me.evidence_kind === 'sandbox_test';
+      // F21: the run fields belong to a sandbox test, and a sandbox test names both.
+      if (sandbox && v12 && !(has('runs') && has('runs_proven'))) at('F21', 'machine_evidence', 'a sandbox_test needs runs and runs_proven');
+      if (!sandbox && (has('runs') || has('runs_proven'))) at('F21', 'machine_evidence', 'runs and runs_proven are only for a sandbox_test');
+      if (has('runs') && has('runs_proven') && me.runs_proven > me.runs) at('F21', 'machine_evidence.runs_proven', 'is more than runs');
+    }
     const waived = machine && rec.class === 'finding' && rec.confidence === 'SUSPECTED';
     for (const f of rules.need) {
       if (hasOwn(rec, f) || waived) continue;
@@ -200,7 +213,11 @@ function checkRecord(rec, i, ctx, state, controls, report) {
     }
     // F13 owner evidence.
     const oe = rec.owner_evidence || [];
-    if (rec.demonstrated && oe.length === 0) at('F13', 'demonstrated', 'is true but owner_evidence is empty');
+    // 1.2.0: a test the engine ran in the sandbox at least MIN_PROOF_RUNS times, with the flaw shown in every run, stands in for owner evidence.
+    const me2 = rec.machine_evidence;
+    const shown = state.version === EVIDENCE_KIND_VERSION && me2?.evidence_kind === 'sandbox_test' && Number.isInteger(me2.runs) && me2.runs >= MIN_PROOF_RUNS && me2.runs_proven === me2.runs;
+    if (rec.demonstrated && oe.length === 0 && !shown) at('F13', 'demonstrated', 'is true but owner_evidence is empty');
+    if (!rec.demonstrated && shown && oe.length === 0) warn('F13', 'demonstrated', `is false although the sandbox test showed the flaw in all ${me2.runs} runs`);
     oe.forEach((e, k) => {
       const want = e.hash_kind === 'git_blob' ? 40 : 64;
       if (e.hash.length !== want) at('F13', `owner_evidence[${k + 1}].hash`, `does not fit hash_kind ${e.hash_kind}`);
@@ -268,7 +285,11 @@ export function validateDocument(doc, { controls = null, c = new Collector() } =
   if (reportOk) summary.report = report;
   // F15 deterministic_only: no model ran, so no agent calls, and every fail record stands on its machine_evidence.
   const deterministic = reportOk && report.incomplete_reason === 'deterministic_only';
-  if (deterministic && doc.schema_version !== MACHINE_EVIDENCE_VERSION) c.error('F15', 'report incomplete_reason', `deterministic_only needs schema_version ${MACHINE_EVIDENCE_VERSION}`);
+  // engine_hunt: the engine ran a hunt, so model calls were made and counted, and no kit verifier ran. Every fail record stands on its machine_evidence.
+  const hunted = reportOk && report.incomplete_reason === 'engine_hunt';
+  if (hunted && doc.schema_version !== EVIDENCE_KIND_VERSION) c.error('F15', 'report incomplete_reason', `engine_hunt needs schema_version ${EVIDENCE_KIND_VERSION}`);
+  if (hunted && !(report.agent_calls >= 1)) c.error('F15', 'report agent_calls', 'must be at least 1 when the run is engine_hunt');
+  if (deterministic && doc.schema_version === '1.0.0') c.error('F15', 'report incomplete_reason', `deterministic_only needs schema_version ${MACHINE_EVIDENCE_VERSION} or later`);
   if (deterministic && report.agent_calls !== 0) c.error('F15', 'report agent_calls', 'must be 0 when the run is deterministic_only');
 
   const fps = [];
@@ -285,7 +306,7 @@ export function validateDocument(doc, { controls = null, c = new Collector() } =
     if (c.errorCount !== e0) return; // cross checks only run on records whose shape is sound
     fps.push([rec.fingerprint, n]);
     checkRecord(rec, i, ctx, state, controls, reportOk ? report : null);
-    if (deterministic && kind === 'fail' && !hasOwn(rec, 'machine_evidence')) c.error('F15', `${ctx.base} machine_evidence`, 'is required on every fail record when the run is deterministic_only');
+    if ((deterministic || hunted) && kind === 'fail' && !hasOwn(rec, 'machine_evidence')) c.error('F15', `${ctx.base} machine_evidence`, 'is required on every fail record when the run is deterministic_only');
   });
   // F8 order and uniqueness across records (valid fingerprints only).
   for (let k = 1; k < fps.length; k++) {
@@ -341,7 +362,7 @@ export function findingsSchema() {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     $id: 'https://hullproof.invalid/findings.schema.json',
     title: 'Hullproof findings record',
-    description: 'The JSON object inside the hullproof-findings block of a <report>.findings.md file. This schema states field names, types and limits only. It cannot state the rules that connect fields (class and kind requirements, fingerprint order and prefix, verifier and lowering rules, report consistency, machine_evidence only in schema_version 1.1.0). validate-findings.mjs checks those.',
+    description: 'The JSON object inside the hullproof-findings block of a <report>.findings.md file. This schema states field names, types and limits only. It cannot state the rules that connect fields (class and kind requirements, fingerprint order and prefix, verifier and lowering rules, report consistency, machine_evidence from schema_version 1.1.0, its evidence_kind and run fields from 1.2.0). validate-findings.mjs checks those.',
     ...top,
   };
 }

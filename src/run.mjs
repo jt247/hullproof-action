@@ -29,10 +29,23 @@ export function resolveTarget(workspace, given) {
   return { path: abs };
 }
 
-// The commit checked out in the workspace, or null when git cannot say.
+// The commit checked out in the workspace, read from .git without running git, or null when it cannot be read.
 export function headCommit(workspace) {
-  const r = spawnSync('git', ['-c', 'safe.directory=*', '-C', workspace, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
-  return r.status === 0 ? r.stdout.trim() : null;
+  const read = (p) => { try { return readFileSync(p, 'utf8').trim(); } catch { return ''; } };
+  const sha = /^[0-9a-f]{40}$/;
+  let gitDir = join(workspace, '.git');
+  const pointer = /^gitdir:\s*(.+)$/m.exec(read(gitDir));
+  if (pointer) gitDir = resolve(workspace, pointer[1].trim());
+  const head = read(join(gitDir, 'HEAD'));
+  if (sha.test(head)) return head;
+  const ref = /^ref:\s*(\S+)$/.exec(head)?.[1];
+  if (!ref) return null;
+  if (sha.test(read(join(gitDir, ref)))) return read(join(gitDir, ref));
+  for (const line of read(join(gitDir, 'packed-refs')).split('\n')) {
+    const [id, name] = line.trim().split(' ');
+    if (name === ref && sha.test(id)) return id;
+  }
+  return null;
 }
 
 export function readEvent(env) {

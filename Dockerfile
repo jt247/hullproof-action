@@ -1,6 +1,7 @@
 # Hullproof Action image. Everything that runs in it is pinned:
 #   the base image by digest, Node and the three Go scanners by version and sha256 (per CPU architecture), Semgrep and its Python
-#   dependencies by version and wheel hash (semgrep.lock), and the engine by the sha256 of its tarball.
+#   dependencies by version and wheel hash (semgrep.lock), and the engine by the exact npm version and its published integrity, which
+#   the build checks before it installs anything (a mismatch stops the build).
 # The operating system packages (git, Python, certificates) come from the pinned Debian image through apt, which does not hash pin them.
 FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
 
@@ -8,7 +9,9 @@ ARG NODE_VERSION=22.23.2
 ARG GITLEAKS_VERSION=8.30.1
 ARG TRIVY_VERSION=0.75.0
 ARG OSV_VERSION=2.6.0
-ARG ENGINE_SHA256=028709bea0b84a2227f9676ddef4ad64e0814efa5b83b6d37237f286b7054d98
+ARG HULLPROOF_VERSION=0.5.0
+ARG HULLPROOF_SHASUM=0db69fe5941929a2efabf533ec1dd8aaabcbd0b6
+ARG HULLPROOF_INTEGRITY=sha512-QXlcVepYfnyryqadVIEClI00tFMSbq8+hxF5QcMp5uDbJntYa4X/Z3ldhEr0vIBL46ibMc/r+Fkbz5Q+llKaWQ==
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
@@ -50,10 +53,16 @@ RUN python3 -m venv /opt/semgrep \
  && ln -s /opt/semgrep/bin/semgrep /usr/local/bin/semgrep \
  && rm /tmp/semgrep.lock
 
-COPY engine/hullproof-engine-0.4.0.tgz /tmp/engine.tgz
-RUN echo "${ENGINE_SHA256}  /tmp/engine.tgz" | sha256sum -c - \
- && npm install --global --ignore-scripts --no-audit --no-fund /tmp/engine.tgz \
- && rm /tmp/engine.tgz
+# The engine comes from npm at one exact version. The tarball is downloaded with npm pack, its sha512 integrity and sha1 shasum are
+# compared with the values above, and only then is it installed from the file. It has no runtime dependencies and no install scripts run.
+RUN cd /tmp \
+ && npm pack "hullproof@${HULLPROOF_VERSION}" --silent >/dev/null \
+ && node -e "const c=require('node:crypto'),b=require('node:fs').readFileSync('hullproof-${HULLPROOF_VERSION}.tgz');\
+const i='sha512-'+c.createHash('sha512').update(b).digest('base64'),h=c.createHash('sha1').update(b).digest('hex');\
+if(i!==process.argv[1]||h!==process.argv[2]){console.error('hullproof tarball does not match the pinned integrity');process.exit(1)}" "${HULLPROOF_INTEGRITY}" "${HULLPROOF_SHASUM}" \
+ && npm install --global --ignore-scripts --no-audit --no-fund "/tmp/hullproof-${HULLPROOF_VERSION}.tgz" \
+ && rm "/tmp/hullproof-${HULLPROOF_VERSION}.tgz" \
+ && test "$(hullproof version)" = "${HULLPROOF_VERSION}"
 
 COPY kit /opt/hullproof/kit
 COPY src/run.mjs /opt/action/run.mjs

@@ -17,8 +17,8 @@ Full text: [LICENSE](LICENSE). The code is everything that runs or configures a 
 | `kit/editors/` (rule files, skills, agents, enforcement settings and each `TOOL.json`) | Configuration files that Claude Code, Codex, Cursor and the other supported tools read |
 | `kit/.claude/agents/`, `kit/.claude/skills/`, `kit/.claude/rules/` | Agent, skill and scoped rule files that configure Claude Code |
 | `kit/docs/hullproof/.kit-manifest` | The file list the auditor uses to check the kit |
-| `engine/` (release zip only) | The Hullproof Engine, the open edition, with the same terms as the public engine repository: the Apache License 2.0, text in `engine/LICENSE`. It holds no Pro file |
-| `pack/` (release zip only) | The upload pack. It holds the kit prompts, tool pages and documentation under the licenses of those files in the tables here |
+| `engine/` | The Hullproof Engine, the open edition, with the same terms as the public engine repository: the Apache License 2.0, text in `engine/LICENSE`. It holds no Pro file |
+| `pack/` | The upload pack. It holds the kit prompts, tool pages and documentation under the licenses of those files in the tables here |
 
 ## Documentation: CC BY-SA 4.0
 
@@ -30,7 +30,7 @@ Statement: [LICENSE-DOCS.md](LICENSE-DOCS.md). Full legal code: [LICENSE-DOCS-CC
 | `kit/docs/hullproof/security-controls.json` | The free controls file: every free requirement as data that the gate, the validators and other tools read. It repeats requirement text from the documentation, so it carries the documentation's licence |
 | `kit/prompts/`, the tool pages `kit/editors/*/README.md` and `kit/editors/README.md` | The audit and install prompts, and the pages that explain each tool |
 | `conventions/` | ID format, requirement template, severity rules and source rules |
-| `README.md`, `CHANGELOG.md` | Repository text |
+| `README.md`, `AI-SETUP.md`, `RELEASE-NOTES-0.5.0.md`, `CHANGELOG.md` | Repository text |
 | `docs/` | The sample audit report |
 | `LICENSING.md`, `SECURITY.md` | These policy pages |
 

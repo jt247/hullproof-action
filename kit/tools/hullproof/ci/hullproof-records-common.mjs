@@ -12,7 +12,15 @@ export const MAX_DEPTH = 32;
 export const SCHEMA_VERSION = '1.0.0'; // the surface ledger, and the oldest findings version still accepted
 // Findings record versions a validator accepts. 1.1.0 adds `machine_evidence` on a fail record and nothing else.
 export const MACHINE_EVIDENCE_VERSION = '1.1.0';
-export const FINDINGS_SCHEMA_VERSIONS = [SCHEMA_VERSION, MACHINE_EVIDENCE_VERSION];
+// 1.2.0 (kit 0.5.0) adds the evidence kind to `machine_evidence`, the run fields of a sandbox test, and the incomplete reason engine_hunt.
+export const EVIDENCE_KIND_VERSION = '1.2.0';
+export const FINDINGS_SCHEMA_VERSIONS = [SCHEMA_VERSION, MACHINE_EVIDENCE_VERSION, EVIDENCE_KIND_VERSION];
+// What produced a machine record. scanner_rule: a rule of a scanner (Semgrep, Gitleaks, Trivy, OSV). engine_check: a check of the engine
+// (map or configuration). hunt_confirmed: a lead a model proposed and the engine confirmed with a deterministic method.
+// sandbox_test: a test the engine ran against the app in the proof sandbox.
+export const EVIDENCE_KINDS = ['scanner_rule', 'engine_check', 'hunt_confirmed', 'sandbox_test'];
+// A sandbox test counts as shown only when it was run at least this many times and showed the flaw every time.
+export const MIN_PROOF_RUNS = 3;
 
 export const SEVERITIES = ['BLOCKER', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 export const SEV_RANK = { BLOCKER: 5, CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
@@ -23,7 +31,8 @@ export const RUN_STATUSES = ['complete', 'incomplete'];
 export const INCOMPLETE_REASONS = ['budget_exhausted', 'agent_failure', 'owner_stopped'];
 // The findings record (schema 1.1.0) adds one reason the surface ledger does not have: deterministic_only, a run by the
 // engine with no model, where no verifier ran by design and every fail record is decided by its machine_evidence.
-export const FINDINGS_INCOMPLETE_REASONS = [...INCOMPLETE_REASONS, 'deterministic_only'];
+// Schema 1.2.0 adds engine_hunt: an engine run whose hunt step made model calls (counted in agent_calls) and where still no kit verifier ran.
+export const FINDINGS_INCOMPLETE_REASONS = [...INCOMPLETE_REASONS, 'deterministic_only', 'engine_hunt'];
 export const ROUTE_STATES = ['NEEDS DASHBOARD', 'NEEDS BUILD', 'NEEDS DYNAMIC TEST', 'ASK OWNER', 'ATTESTATION', 'UNKNOWN'];
 
 // ---------------------------------------------------------------- reading input
@@ -258,6 +267,9 @@ export const MACHINE_EVIDENCE = T.obj({
   rule_id: T.pattern(RULE_ID_RE, 200),
   tool_version: T.pattern(TOOL_VERSION_RE, 60),
   config_sha256: T.pattern('^[0-9a-f]{64}$', 64, { nullable: true }),
+  evidence_kind: T.enum(EVIDENCE_KINDS, { opt: true }),           // 1.2.0, required there
+  runs: T.int(1, 20, { opt: true }),                              // 1.2.0, sandbox_test only: how often the test ran
+  runs_proven: T.int(0, 20, { opt: true }),                       // 1.2.0, sandbox_test only: in how many of those runs it showed the flaw
 });
 
 const PATTERNS = {
